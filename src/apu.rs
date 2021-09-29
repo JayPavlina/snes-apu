@@ -15,8 +15,8 @@ static DEFAULT_IPL_ROM: [u8; IPL_ROM_LEN] = [
 ];
 
 pub struct Apu {
-    ram: Box<[u8]>,
-    ipl_rom: Box<[u8]>,
+    ram: [u8; RAM_LEN],
+    ipl_rom: [u8; IPL_ROM_LEN],
 
     pub smp: Smp,
     pub dsp: Dsp,
@@ -29,11 +29,11 @@ pub struct Apu {
 
 impl Apu {
     pub fn new() -> Apu {
-        let mut ret = Apu {
-            ram: vec![0; RAM_LEN].into_boxed_slice(),
-            ipl_rom: DEFAULT_IPL_ROM.iter().cloned().collect::<Vec<_>>().into_boxed_slice(),
+        let mut apu = Apu {
+            ram: [0; RAM_LEN],
+            ipl_rom: DEFAULT_IPL_ROM,
 
-            // put temporary values that will be replaced
+            // temporary values that will be replaced
             smp: Smp::new(0 as _),
             dsp: Dsp::new(0 as _),
 
@@ -42,11 +42,11 @@ impl Apu {
             is_ipl_rom_enabled: true,
             dsp_reg_address: 0
         };
-        let ret_ptr = &mut ret as *mut _;
-        ret.smp = Smp::new(ret_ptr);
-        ret.dsp = Dsp::new(ret_ptr);
-        ret.dsp.init(ret_ptr);
-        ret
+        let apu_ptr = &mut apu as *mut _;
+        apu.smp = Smp::new(apu_ptr);
+        apu.dsp = Dsp::new(apu_ptr);
+        apu.dsp.init(apu_ptr);
+        apu
     }
 
     pub fn from_spc(spc: &Spc) -> Apu {
