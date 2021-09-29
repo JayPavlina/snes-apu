@@ -18,8 +18,8 @@ pub struct Apu {
     ram: Box<[u8]>,
     ipl_rom: Box<[u8]>,
 
-    pub smp: Box<Smp>,
-    pub dsp: Box<Dsp>,
+    pub smp: Smp,
+    pub dsp: Dsp,
 
     timers: [Timer; 3],
 
@@ -28,27 +28,28 @@ pub struct Apu {
 }
 
 impl Apu {
-    pub fn new() -> Box<Apu> {
-        let mut ret = Box::new(Apu {
+    pub fn new() -> Apu {
+        let mut ret = Apu {
             ram: vec![0; RAM_LEN].into_boxed_slice(),
             ipl_rom: DEFAULT_IPL_ROM.iter().cloned().collect::<Vec<_>>().into_boxed_slice(),
 
             // put temporary values that will be replaced
-            smp: Box::new(Smp::new(0 as _)),
+            smp: Smp::new(0 as _),
             dsp: Dsp::new(0 as _),
 
             timers: [Timer::new(256), Timer::new(256), Timer::new(32)],
 
             is_ipl_rom_enabled: true,
             dsp_reg_address: 0
-        });
-        let ret_ptr = &mut *ret as *mut _;
-        ret.smp = Box::new(Smp::new(ret_ptr));
+        };
+        let ret_ptr = &mut ret as *mut _;
+        ret.smp = Smp::new(ret_ptr);
         ret.dsp = Dsp::new(ret_ptr);
+        ret.dsp.init(ret_ptr);
         ret
     }
 
-    pub fn from_spc(spc: &Spc) -> Box<Apu> {
+    pub fn from_spc(spc: &Spc) -> Apu {
         let mut ret = Apu::new();
 
         for i in 0..RAM_LEN {
@@ -59,7 +60,7 @@ impl Apu {
         }
 
         {
-            let smp = ret.smp.as_mut();
+            let smp = &mut ret.smp;
             smp.reg_pc = spc.pc;
             smp.reg_a = spc.a;
             smp.reg_x = spc.x;
@@ -68,7 +69,7 @@ impl Apu {
             smp.reg_sp = spc.sp;
         }
 
-        ret.dsp.as_mut().set_state(spc);
+        ret.dsp.set_state(spc);
 
         for i in 0..3 {
             let target = ret.ram[0xfa + i];
@@ -83,18 +84,16 @@ impl Apu {
     }
 
     pub fn render(&mut self, left_buffer: &mut [i16], right_buffer: &mut [i16], num_samples: i32) {
-        let smp = self.smp.as_mut();
-        let dsp = self.dsp.as_mut();
-        while dsp.output_buffer.get_sample_count() < num_samples {
-            smp.run(num_samples * 64);
-            dsp.flush();
+        while self.dsp.output_buffer.get_sample_count() < num_samples {
+            self.smp.run(num_samples * 64);
+            self.dsp.flush();
         }
 
-        dsp.output_buffer.read(left_buffer, right_buffer, num_samples);
+        self.dsp.output_buffer.read(left_buffer, right_buffer, num_samples);
     }
 
     pub fn cpu_cycles_callback(&mut self, num_cycles: i32) {
-        self.dsp.as_mut().cycles_callback(num_cycles);
+        self.dsp.cycles_callback(num_cycles);
         for timer in self.timers.iter_mut() {
             timer.cpu_cycles_callback(num_cycles);
         }
@@ -107,7 +106,7 @@ impl Apu {
                 0xf0 | 0xf1 => 0,
 
                 0xf2 => self.dsp_reg_address,
-                0xf3 => self.dsp.as_mut().get_register(self.dsp_reg_address),
+                0xf3 => self.dsp.get_register(self.dsp_reg_address),
 
                 0xfa ... 0xfc => 0,
 
@@ -131,7 +130,7 @@ impl Apu {
                 0xf0 => { self.set_test_reg(value); },
                 0xf1 => { self.set_control_reg(value); },
                 0xf2 => { self.dsp_reg_address = value; },
-                0xf3 => { self.dsp.as_mut().set_register(self.dsp_reg_address, value); },
+                0xf3 => { self.dsp.set_register(self.dsp_reg_address, value); },
 
                 0xf4 ... 0xf9 => { self.ram[address as usize] = value; },
 
@@ -147,13 +146,12 @@ impl Apu {
     }
 
     pub fn clear_echo_buffer(&mut self) {
-        let dsp = self.dsp.as_mut();
-        let length = dsp.calculate_echo_length();
-        let mut end_addr = dsp.get_echo_start_address() as i32 + length;
+        let length = self.dsp.calculate_echo_length();
+        let mut end_addr = self.dsp.get_echo_start_address() as i32 + length;
         if end_addr > RAM_LEN as i32 {
             end_addr = RAM_LEN as i32;
         }
-        for i in dsp.get_echo_start_address() as i32..end_addr {
+        for i in self.dsp.get_echo_start_address() as i32..end_addr {
             self.ram[i as usize] = 0xff;
         }
     }

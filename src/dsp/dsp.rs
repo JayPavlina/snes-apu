@@ -52,9 +52,9 @@ pub struct Dsp {
 }
 
 impl Dsp {
-    pub fn new(emulator: *mut Apu) -> Box<Dsp> {
+    pub fn new(emulator: *mut Apu) -> Dsp {
         let resampling_mode = ResamplingMode::Gaussian;
-        let mut ret = Box::new(Dsp {
+        let mut ret = Dsp {
             emulator: emulator,
 
             voices: Vec::with_capacity(NUM_VOICES),
@@ -83,21 +83,25 @@ impl Dsp {
             echo_length: 0,
 
             resampling_mode: resampling_mode,
-        });
-        let ret_ptr = &mut *ret as *mut _;
-        for _ in 0..NUM_VOICES {
-            ret.voices.push(Box::new(Voice::new(ret_ptr, emulator, resampling_mode)));
-        }
-        ret.set_filter_coefficient(0x00, 0x80);
-        ret.set_filter_coefficient(0x01, 0xff);
-        ret.set_filter_coefficient(0x02, 0x9a);
-        ret.set_filter_coefficient(0x03, 0xff);
-        ret.set_filter_coefficient(0x04, 0x67);
-        ret.set_filter_coefficient(0x05, 0xff);
-        ret.set_filter_coefficient(0x06, 0x0f);
-        ret.set_filter_coefficient(0x07, 0xff);
-        ret.set_resampling_mode(ResamplingMode::Gaussian);
+        };
+
         ret
+    }
+
+    pub(crate) fn init(&mut self, emulator: *mut Apu) {
+        let ret_ptr = self as *mut _;
+        for _ in 0..NUM_VOICES {
+            self.voices.push(Box::new(Voice::new(ret_ptr, emulator, self.resampling_mode)));
+        }
+        self.set_filter_coefficient(0x00, 0x80);
+        self.set_filter_coefficient(0x01, 0xff);
+        self.set_filter_coefficient(0x02, 0x9a);
+        self.set_filter_coefficient(0x03, 0xff);
+        self.set_filter_coefficient(0x04, 0x67);
+        self.set_filter_coefficient(0x05, 0xff);
+        self.set_filter_coefficient(0x06, 0x0f);
+        self.set_filter_coefficient(0x07, 0xff);
+        self.set_resampling_mode(ResamplingMode::Gaussian);
     }
 
     #[inline]
